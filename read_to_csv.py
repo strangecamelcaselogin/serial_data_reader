@@ -11,9 +11,8 @@ def bytes_to_data(raw_msg: bytes):
     lines = raw_msg.split(b'\r\n')
     for l in lines:
         try:
-            l = l.decode()
-            t, v = l.split(';')
-            result.append((int(t), (int(v))))
+            values = list(map(float, l.split(b';')))
+            result.append(values)
         except (UnicodeDecodeError, ValueError) as e:
             pass
 
