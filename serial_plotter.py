@@ -101,8 +101,9 @@ class MainWindow(QMainWindow):
 
     def init_plot(self, columns_count):
         """ Инициализируем матрицу данных и объекты линий по количеству колонок в данных """
+        self.data_pw.addLegend()
         self.data = [[] for _ in range(columns_count)]
-        self.curves = [self.data_pw.plot(pen=pg.intColor(i)) for i in range(columns_count - 1)]
+        self.curves = [self.data_pw.plot(pen=pg.intColor(i), name=f'column {i+1}') for i in range(columns_count - 1)]
 
     def setup_ui(self):
         """ Инициализация интерфейса """
