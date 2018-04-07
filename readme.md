@@ -6,7 +6,8 @@
 \* требует только pyserial
 
 ### serial_plotter.py
-Живой вывод графиков
+Живой вывод графиков (возможно нескольких)
+![example](./example.png)
 
 \* требует, qt, pyqtgraph, numpy и pyserial
 
