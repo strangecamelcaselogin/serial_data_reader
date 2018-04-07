@@ -2,7 +2,8 @@ import csv
 from datetime import datetime
 
 from serial import Serial
-from serial.tools.list_ports import comports
+
+from helpers import configure_serial
 
 
 def bytes_to_data(raw_msg: bytes):
@@ -20,18 +21,9 @@ def bytes_to_data(raw_msg: bytes):
 
 
 if __name__ == '__main__':
-    ports = comports()
-    if not ports:
-        print('Не найдено ни ожного последовательного порта')
-        exit()
+    port, bd = configure_serial()
 
-    for i, p in enumerate(ports):
-        print(f'{i}: {p.device}')
-
-    port_number = int(input('Какой порт использовать (номер)? ')) if len(ports) > 1 else 0
-    bd = int(input('Скорость соединения: '))
-
-    ser = Serial(ports[port_number].device, bd)
+    ser = Serial(port.device, bd)
 
     raw_data = b""
     try:
