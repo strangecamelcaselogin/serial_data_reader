@@ -7,7 +7,7 @@ DEFAULT_BD = 9600
 def configure_serial():
     ports = comports()
     if not ports:
-        print('Не найдено ни ожного последовательного порта')
+        print('Не найдено ни одного последовательного порта')
         exit()
 
     for i, p in enumerate(ports):

@@ -9,8 +9,9 @@ from threading import Thread
 import numpy as np
 
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
-from PyQt5.QtWidgets import QMainWindow, QGridLayout, QWidget, QPushButton, QMessageBox, QHBoxLayout
+from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, Qt
+from PyQt5.QtWidgets import QMainWindow, QGridLayout, QWidget, QPushButton, QMessageBox, QHBoxLayout, QDialog, \
+    QVBoxLayout, QCheckBox
 
 from serial import Serial
 
@@ -25,6 +26,7 @@ DEFAULT_DT = 0.05
 
 class Communicator(QObject):
     update_ui = pyqtSignal(list)
+    update_filtered_curves = pyqtSignal(int, bool)
 
 
 class SerialReader:
@@ -78,6 +80,41 @@ class SerialReader:
                 self._communicator.update_ui.emit(batch_data)  # отправим данные
 
 
+class ViewSettingsWindow(QDialog):
+    """
+    Окно редактирования видимости линий
+    """
+    def __init__(self, communicator, invisible_curves, curves_names, parent=None):
+        super().__init__(parent)
+
+        self.communicator = communicator
+        self.invisible_curves = invisible_curves
+        self.curves_names = curves_names
+
+        # создадим чекбоксы на каждую линию
+        self.buttons_group = []
+        for i, (c_name, c_active) in enumerate(zip(self.curves_names, self.invisible_curves)):
+            cb = QCheckBox(c_name)
+            cb.setChecked(not c_active)  # активный чекбокс показывает False в invisible_curves
+
+            # не знаю как иначе передать номер чек бокса внутрь обработчика, только лямбда и замыкание...
+            #  причем пробросим i внутрь лямбды через kwargs, иначе у каждой лямбды будет последнее i счетчитка
+            cb.toggled.connect(lambda value, i=i: self.update_checkbox(i, value))
+            self.buttons_group.append(cb)
+
+        self.setWindowTitle('View Settings')
+        self.setMinimumWidth(150)
+
+        l = QVBoxLayout()
+        for b in self.buttons_group:
+            l.addWidget(b)
+
+        self.setLayout(l)
+
+    def update_checkbox(self, curve_number, value):
+        self.communicator.update_filtered_curves.emit(curve_number, not value)  # значения чекбокса с флагами инверировано
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -85,10 +122,13 @@ class MainWindow(QMainWindow):
 
         self.data_pw = pg.PlotWidget(background='#fff')
         self.export_button = QPushButton('Export')
+        self.view_settings_button = QPushButton('View Settings')
 
         self.serial_reader = SerialReader(self.communicator)
         self.data = None
         self.curves = None
+        self.curves_names = None
+        self.invisible_curves = None
 
         self.setup_ui()
 
@@ -103,7 +143,9 @@ class MainWindow(QMainWindow):
         """ Инициализируем матрицу данных и объекты линий по количеству колонок в данных """
         self.data_pw.addLegend()
         self.data = [[] for _ in range(columns_count)]
-        self.curves = [self.data_pw.plot(pen=pg.intColor(i), name=f'column {i+1}') for i in range(columns_count - 1)]
+        self.curves_names = [f'column {i+1}' for i in range(columns_count - 1)]
+        self.curves = [self.data_pw.plot(pen=pg.intColor(i), name=self.curves_names[i]) for i in range(columns_count - 1)]
+        self.invisible_curves = [False for _ in range(columns_count - 1)]  # флаги показа/скрытия линии
 
     def setup_ui(self):
         """ Инициализация интерфейса """
@@ -117,6 +159,7 @@ class MainWindow(QMainWindow):
         top_bar.setLayout(h_layout)
 
         h_layout.addWidget(self.export_button)
+        h_layout.addWidget(self.view_settings_button)
         h_layout.addStretch(1)
 
         grid_layout.addWidget(top_bar)
@@ -129,7 +172,9 @@ class MainWindow(QMainWindow):
         self.data_pw.showGrid(True, True, .5)
 
         self.export_button.clicked.connect(self.export)
+        self.view_settings_button.clicked.connect(self.show_view_settings)
         self.communicator.update_ui.connect(self.update_ui)
+        self.communicator.update_filtered_curves.connect(self.update_filtered_curves)
 
     @pyqtSlot()
     def export(self):
@@ -142,6 +187,18 @@ class MainWindow(QMainWindow):
 
             QMessageBox.about(self, 'Success', f'export file name: "{filename}"')
 
+    @pyqtSlot()
+    def show_view_settings(self):
+        vsw = ViewSettingsWindow(self.communicator, self.invisible_curves, self.curves_names, parent=self)
+        vsw.show()
+
+    @pyqtSlot(int, bool)
+    def update_filtered_curves(self, curve_number: int, set_invisible: bool):
+        """ Слот на изменении чекбокса в ViewSettingsWindow """
+        self.invisible_curves[curve_number] = set_invisible
+        if set_invisible:
+            self.curves[curve_number].clear()
+
     @pyqtSlot(list)
     def update_ui(self, batch_values):
         """ Коллбек, вызывается из SerialReader по пришествию данных """
@@ -153,7 +210,8 @@ class MainWindow(QMainWindow):
         # выведем данные
         t, *others = self.data  # разделим на временную шкалу и остальное
         for i, o in enumerate(others):
-            self.curves[i].setData(t, o)  # обновим данные у объекта линии
+            if not self.invisible_curves[i]:  # если линия не отмечена как невидимая
+                self.curves[i].setData(t, o)  # обновим данные у объекта линии
 
 
 def configure_self():
