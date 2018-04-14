@@ -122,9 +122,13 @@ class MainWindow(QMainWindow):
 
         self.data_pw = pg.PlotWidget(background='#fff')
         self.export_button = QPushButton('Export')
-        self.view_settings_button = QPushButton('View Settings')
+        self.view_settings_button = QPushButton('Settings')
+        self.clear_button = QPushButton('Clear')
+        self.vsw: ViewSettingsWindow = None
 
         self.serial_reader = SerialReader(self.communicator)
+
+        self.columns = None
         self.data = None
         self.curves = None
         self.curves_names = None
@@ -133,8 +137,9 @@ class MainWindow(QMainWindow):
         self.setup_ui()
 
     def start(self, port, bd, columns, dt):
-        self.init_plot(columns)
-        self.serial_reader.start(port, bd, columns, dt)
+        self.columns = columns
+        self.init_plot(self.columns)
+        self.serial_reader.start(port, bd, self.columns, dt)
 
     def stop(self):
         self.serial_reader.stop()
@@ -160,6 +165,7 @@ class MainWindow(QMainWindow):
 
         h_layout.addWidget(self.export_button)
         h_layout.addWidget(self.view_settings_button)
+        h_layout.addWidget(self.clear_button)
         h_layout.addStretch(1)
 
         grid_layout.addWidget(top_bar)
@@ -173,6 +179,7 @@ class MainWindow(QMainWindow):
 
         self.export_button.clicked.connect(self.export)
         self.view_settings_button.clicked.connect(self.show_view_settings)
+        self.clear_button.clicked.connect(self.clear_data)
         self.communicator.update_ui.connect(self.update_ui)
         self.communicator.update_filtered_curves.connect(self.update_filtered_curves)
 
@@ -189,8 +196,19 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot()
     def show_view_settings(self):
-        vsw = ViewSettingsWindow(self.communicator, self.invisible_curves, self.curves_names, parent=self)
-        vsw.show()
+        self.vsw = ViewSettingsWindow(self.communicator, self.invisible_curves, self.curves_names, parent=self)
+        self.vsw.show()
+
+    @pyqtSlot()
+    def clear_data(self):
+        if self.vsw is not None:
+            self.vsw.close()
+
+        self.data_pw.clear()
+        legend = self.data_pw.plotItem.legend  # потому что лененда не принадлежит plotWidget и plotItem
+        legend.scene().removeItem(legend)
+
+        self.init_plot(self.columns)
 
     @pyqtSlot(int, bool)
     def update_filtered_curves(self, curve_number: int, set_invisible: bool):
